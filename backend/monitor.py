@@ -114,6 +114,10 @@ def process_account(account):
 
     print("TOTAL POSTS ENCONTRADOS:", len(posts))
 
+    if not processed[account_key]:
+        posts = posts[:5]
+        print("PRIMEIRA EXECUÇÃO — limitando aos 5 posts mais recentes")
+
     for post in posts:
         post_id = str(
             post.get("id")
