@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMM Automator</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>SMM Automator</h1>
+    <span class="badge" id="statusBadge">● Offline</span>
+  </div>
+  <div class="header-right">
+    <label class="toggle-label">
+      <span>Monitor</span>
+      <input type="checkbox" id="toggleMonitor">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- DASHBOARD TOP -->
+  <div class="card dashboard-grid">
+    <div class="stat-card">
+      <span class="stat-value" id="dFollowers">-</span>
+      <span class="stat-label">Seguidores</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="dPosts">0</span>
+      <span class="stat-label">Posts Processados</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="dOrders">0</span>
+      <span class="stat-label">Pedidos Enviados</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="dErrors">0</span>
+      <span class="stat-label">Erros</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="dChecks">0</span>
+      <span class="stat-label">Verificações</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="dBalance">-</span>
+      <span class="stat-label">Saldo SMM</span>
+    </div>
+  </div>
+
+  <!-- CONTA INSTAGRAM -->
+  <div class="card">
+    <h2>Conta Instagram</h2>
+    <div class="form-row">
+      <div class="field">
+        <label>ID Instagram</label>
+        <input id="instagram_id" placeholder="70363425041">
+      </div>
+      <div class="field">
+        <label>Intervalo (minutos)</label>
+        <input id="interval" type="number" value="5">
+      </div>
+    </div>
+    <div class="meta-info" id="metaInfo" style="display:none">
+      <span id="lastUsername"></span>
+      <span id="lastRun"></span>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" onclick="saveConfig()">Salvar</button>
+      <button class="btn secondary" onclick="runNow()">▶ Verificar Agora</button>
+    </div>
+  </div>
+
+  <!-- SERVICOS SMM -->
+  <div class="card">
+    <h2>Serviços SMM</h2>
+    <div class="services-grid">
+
+      <div class="service-box">
+        <div class="service-header">
+          <h3>Seguidores</h3>
+          <label class="check">
+            <input id="followers_enabled" type="checkbox">
+          </label>
+        </div>
+        <div class="field">
+          <label>ID Serviço</label>
+          <input id="followers_service" placeholder="8762">
+        </div>
+        <div class="field">
+          <label>% dos seguidores</label>
+          <div class="pct-row">
+            <input id="followers_pct" type="range" min="1" max="100" value="10">
+            <span id="followers_pct_val">10%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-box">
+        <div class="service-header">
+          <h3>Likes</h3>
+          <label class="check">
+            <input id="likes_enabled" type="checkbox">
+          </label>
+        </div>
+        <div class="field">
+          <label>ID Serviço</label>
+          <input id="likes_service" placeholder="9799">
+        </div>
+        <div class="field">
+          <label>% dos seguidores</label>
+          <div class="pct-row">
+            <input id="likes_pct" type="range" min="1" max="100" value="10">
+            <span id="likes_pct_val">10%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-box">
+        <div class="service-header">
+          <h3>Views</h3>
+          <label class="check">
+            <input id="views_enabled" type="checkbox">
+          </label>
+        </div>
+        <div class="field">
+          <label>ID Serviço</label>
+          <input id="views_service" placeholder="6013">
+        </div>
+        <div class="field">
+          <label>% dos seguidores</label>
+          <div class="pct-row">
+            <input id="views_pct" type="range" min="1" max="100" value="10">
+            <span id="views_pct_val">10%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-box">
+        <div class="service-header">
+          <h3>Compartilhamentos</h3>
+          <label class="check">
+            <input id="shares_enabled" type="checkbox">
+          </label>
+        </div>
+        <div class="field">
+          <label>ID Serviço</label>
+          <input id="shares_service" placeholder="9193">
+        </div>
+        <div class="field">
+          <label>% dos seguidores</label>
+          <div class="pct-row">
+            <input id="shares_pct" type="range" min="1" max="100" value="1">
+            <span id="shares_pct_val">1%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-box">
+        <div class="service-header">
+          <h3>Salvamentos</h3>
+          <label class="check">
+            <input id="saves_enabled" type="checkbox">
+          </label>
+        </div>
+        <div class="field">
+          <label>ID Serviço</label>
+          <input id="saves_service" placeholder="9192">
+        </div>
+        <div class="field">
+          <label>% dos seguidores</label>
+          <div class="pct-row">
+            <input id="saves_pct" type="range" min="1" max="100" value="0">
+            <span id="saves_pct_val">0%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Logs</h2>
+      <button class="btn small" onclick="loadLogs()">Atualizar</button>
+    </div>
+    <div class="log-container" id="logs">
+      <div class="log-empty">Nenhum log ainda</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
