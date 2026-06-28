@@ -9,8 +9,8 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      RAPIDAPI_KEY: SUA_KEY_RAPIDAPI
+      RAPIDAPI_KEY: SUA_CHAVE_RAPIDAPI
       RAPIDAPI_HOST: instagram-api-fast-reliable-public-data-scraper.p.rapidapi.com
-      MORETHANPANEL_API_KEY: SUA_KEY_SMM
+      MORETHANPANEL_API_KEY: SUA_CHAVE_SMM
       MORETHANPANEL_URL: https://morethanpanel.com/api/v2
       TZ: America/Sao_Paulo

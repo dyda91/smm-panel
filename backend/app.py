@@ -3,7 +3,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import json
-import threading
+import fcntl
+import time
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,19 +25,40 @@ CORS(app)
 
 Base.metadata.create_all(engine)
 
-monitor_lock = threading.Lock()
-monitor_enabled = False
-
-STATS = {
-    "checks": 0,
-    "orders": 0,
-    "errors": 0,
-    "last_run": None,
-    "last_followers": 0,
-    "last_username": ""
-}
-
+STATE_FILE = "monitor_state.json"
+LOCK_FILE = "monitor.lock"
 LOG_STORE = []
+
+
+def read_state():
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"enabled": False, "checks": 0, "orders": 0, "errors": 0,
+                "last_run": None, "last_followers": 0, "last_username": ""}
+
+
+def write_state(state):
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
+
+
+def acquire_lock():
+    try:
+        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+        return fd
+    except FileExistsError:
+        return None
+
+
+def release_lock(fd):
+    if fd is not None:
+        os.close(fd)
+        try:
+            os.unlink(LOCK_FILE)
+        except FileNotFoundError:
+            pass
 
 
 def add_log(level, message):
@@ -52,13 +74,16 @@ def home():
 
 
 def monitor_all():
-    global STATS
-    if not monitor_enabled:
+    state = read_state()
+    if not state.get("enabled"):
         print("Monitor desligado")
         return
-    if not monitor_lock.acquire(blocking=False):
-        print("Monitor já executando, pulando...")
+
+    fd = acquire_lock()
+    if fd is None:
+        print("Monitor já executando em outro worker")
         return
+
     db = SessionLocal()
     try:
         accounts = db.query(Account).all()
@@ -66,20 +91,22 @@ def monitor_all():
             try:
                 result = process_account(account)
                 if result:
-                    STATS["checks"] += 1
-                    STATS["orders"] += result.get("orders", 0)
-                    STATS["errors"] += result.get("errors", 0)
+                    state["checks"] = state.get("checks", 0) + 1
+                    state["orders"] = state.get("orders", 0) + result.get("orders", 0)
+                    state["errors"] = state.get("errors", 0) + result.get("errors", 0)
                     if result.get("followers"):
-                        STATS["last_followers"] = result["followers"]
+                        state["last_followers"] = result["followers"]
                     if result.get("username"):
-                        STATS["last_username"] = result["username"]
-                STATS["last_run"] = datetime.now(timezone.utc).isoformat()
+                        state["last_username"] = result["username"]
+                state["last_run"] = datetime.now(timezone.utc).isoformat()
+                write_state(state)
             except Exception as e:
-                STATS["errors"] += 1
+                state["errors"] = state.get("errors", 0) + 1
+                write_state(state)
                 add_log("ERROR", f"Conta {account.instagram_id}: {e}")
     finally:
         db.close()
-        monitor_lock.release()
+        release_lock(fd)
 
 
 scheduler = BackgroundScheduler()
@@ -138,14 +165,16 @@ def run_now():
             return jsonify({"error": "Nenhuma conta"}), 404
         result = process_account(account)
         if result:
-            STATS["checks"] += 1
-            STATS["orders"] += result.get("orders", 0)
-            STATS["errors"] += result.get("errors", 0)
+            state = read_state()
+            state["checks"] = state.get("checks", 0) + 1
+            state["orders"] = state.get("orders", 0) + result.get("orders", 0)
+            state["errors"] = state.get("errors", 0) + result.get("errors", 0)
             if result.get("followers"):
-                STATS["last_followers"] = result["followers"]
+                state["last_followers"] = result["followers"]
             if result.get("username"):
-                STATS["last_username"] = result["username"]
-        STATS["last_run"] = datetime.now(timezone.utc).isoformat()
+                state["last_username"] = result["username"]
+            state["last_run"] = datetime.now(timezone.utc).isoformat()
+            write_state(state)
         return jsonify({"success": True, "account": account.id})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -155,36 +184,40 @@ def run_now():
 
 @app.route("/api/monitor/start", methods=["POST"])
 def monitor_start():
-    global monitor_enabled
-    monitor_enabled = True
+    state = read_state()
+    state["enabled"] = True
+    write_state(state)
     add_log("INFO", "Monitor ligado")
     return jsonify({"success": True, "monitor": True})
 
 
 @app.route("/api/monitor/stop", methods=["POST"])
 def monitor_stop():
-    global monitor_enabled
-    monitor_enabled = False
+    state = read_state()
+    state["enabled"] = False
+    write_state(state)
     add_log("INFO", "Monitor desligado")
     return jsonify({"success": True, "monitor": False})
 
 
 @app.route("/api/monitor/status")
 def monitor_status():
+    state = read_state()
     return jsonify({
-        "enabled": monitor_enabled,
-        "last_run": STATS["last_run"],
-        "checks": STATS["checks"],
-        "orders": STATS["orders"],
-        "errors": STATS["errors"],
-        "last_followers": STATS["last_followers"],
-        "last_username": STATS["last_username"]
+        "enabled": state.get("enabled", False),
+        "last_run": state.get("last_run"),
+        "checks": state.get("checks", 0),
+        "orders": state.get("orders", 0),
+        "errors": state.get("errors", 0),
+        "last_followers": state.get("last_followers", 0),
+        "last_username": state.get("last_username", "")
     })
 
 
 @app.route("/api/dashboard")
 def dashboard():
     db = SessionLocal()
+    state = read_state()
     try:
         total = db.query(Account).count()
         processed = {}
@@ -207,14 +240,14 @@ def dashboard():
         return jsonify({
             "accounts": total,
             "status": "online",
-            "monitor": monitor_enabled,
-            "checks": STATS["checks"],
-            "orders": STATS["orders"],
+            "monitor": state.get("enabled", False),
+            "checks": state.get("checks", 0),
+            "orders": state.get("orders", 0),
             "posts_seen": posts_seen,
-            "errors": STATS["errors"],
-            "last_run": STATS["last_run"],
-            "last_followers": STATS["last_followers"],
-            "last_username": STATS["last_username"],
+            "errors": state.get("errors", 0),
+            "last_run": state.get("last_run"),
+            "last_followers": state.get("last_followers", 0),
+            "last_username": state.get("last_username", ""),
             "instagram_id": account.instagram_id if account else None,
             "interval_minutes": account.interval_minutes if account else 5,
             "balance": balance
