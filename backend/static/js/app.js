@@ -191,6 +191,19 @@ async function loadLogs() {
 }
 
 // =============================================
+// RESET POSTS
+// =============================================
+async function resetPosts() {
+  if (!confirm("Reprocessar os 5 posts mais recentes com os serviços atuais?")) return;
+  const result = await apiPost("/api/reset-posts");
+  if (result.success) {
+    alert("Posts resetados! Clique em Verificar Agora para reprocessar.");
+  } else {
+    alert("Erro: " + (result.error || "desconhecido"));
+  }
+}
+
+// =============================================
 // INIT
 // =============================================
 window.onload = function () {

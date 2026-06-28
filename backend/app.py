@@ -137,14 +137,11 @@ def save_account():
             account = Account()
             db.add(account)
         for key, value in data.items():
-            if hasattr(account, key):
+            if hasattr(account, key) and key not in ("rapid_key", "rapid_host", "smm_key"):
                 setattr(account, key, value)
-        if not account.rapid_key:
-            account.rapid_key = RAPIDAPI_KEY
-        if not account.rapid_host:
-            account.rapid_host = RAPIDAPI_HOST
-        if not account.smm_key:
-            account.smm_key = MORETHANPANEL_API_KEY
+        account.rapid_key = RAPIDAPI_KEY
+        account.rapid_host = RAPIDAPI_HOST
+        account.smm_key = MORETHANPANEL_API_KEY
         db.commit()
         db.refresh(account)
         add_log("INFO", f"Configuração salva — conta {account.instagram_id}")
@@ -180,6 +177,17 @@ def run_now():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
+
+
+@app.route("/api/reset-posts", methods=["POST"])
+def reset_posts():
+    try:
+        with open("processed_posts.json", "w") as f:
+            json.dump({}, f)
+        add_log("INFO", "Posts resetados manualmente")
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/monitor/start", methods=["POST"])
