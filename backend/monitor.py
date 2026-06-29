@@ -43,22 +43,6 @@ def process_account(account):
     print("CONTA:", account.instagram_id)
     print("====================")
 
-    profile = get_profile(account.instagram_id, rapid_key, rapid_host)
-    if not profile:
-        print("Perfil vazio — abortando")
-        return stats
-
-    username = profile.get("username", "")
-    followers = int(profile.get("follower_count", 0))
-    stats["username"] = username
-    stats["followers"] = followers
-    print("USUARIO:", username)
-    print("SEGUIDORES:", followers)
-
-    if followers <= 0:
-        print("Seguidores <= 0, abortando")
-        return stats
-
     processed = load_processed()
     account_key = str(account.instagram_id)
     if account_key not in processed:
@@ -106,8 +90,8 @@ def process_account(account):
         posts = posts[:5]
         print("PRIMEIRA EXECUÇÃO — limitando aos 5 posts mais recentes")
 
-    any_services_sent = False
-
+    # Filtra apenas posts não processados
+    novos = []
     for post in posts:
         post_id = str(
             post.get("id")
@@ -116,21 +100,47 @@ def process_account(account):
             or ""
         )
         if not post_id:
-            print("Post sem ID, pulando")
             continue
-
         if post_id in processed_data["processed_posts"]:
             continue
-
         shortcode = (
             post.get("code")
             or post.get("shortcode")
             or post.get("node", {}).get("shortcode")
         )
         if not shortcode:
-            print("Post sem shortcode, pulando — ID:", post_id)
             continue
+        novos.append((post_id, shortcode, post))
 
+    if not novos:
+        print("Nenhum post novo — pulando perfil e ações")
+        save_processed(processed)
+        return stats
+
+    print(f"POSTS NOVOS: {len(novos)}")
+
+    # Só chama o perfil se houver posts novos
+    profile = get_profile(account.instagram_id, rapid_key, rapid_host)
+    if not profile:
+        print("Perfil vazio — abortando")
+        save_processed(processed)
+        return stats
+
+    username = profile.get("username", "")
+    followers = int(profile.get("follower_count", 0))
+    stats["username"] = username
+    stats["followers"] = followers
+    print("USUARIO:", username)
+    print("SEGUIDORES:", followers)
+
+    if followers <= 0:
+        print("Seguidores <= 0, abortando")
+        save_processed(processed)
+        return stats
+
+    any_services_sent = False
+
+    for post_id, shortcode, post in novos:
         post_link = f"https://instagram.com/p/{shortcode}/"
         print("NOVO POST:", post_link)
 
