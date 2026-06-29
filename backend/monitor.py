@@ -62,27 +62,15 @@ def process_account(account):
     processed = load_processed()
     account_key = str(account.instagram_id)
     if account_key not in processed:
-        processed[account_key] = []
+        processed[account_key] = {"processed_posts": [], "run_counter": 0, "followers_sent_run": 0}
 
-    if account.followers_enabled and account.followers_service:
-        quantidade = int(followers * float(account.followers_pct) / 100)
-        if quantidade > 0:
-            profile_link = f"https://instagram.com/{username}"
-            print("PEDIDO FOLLOWERS:", profile_link, quantidade)
-            try:
-                retorno = add_order(
-                    smm_key=smm_key,
-                    service_id=account.followers_service,
-                    link=profile_link,
-                    quantity=quantidade
-                )
-                stats["orders"] += 1
-                print("RESPOSTA FOLLOWERS:", retorno)
-            except Exception as e:
-                stats["errors"] += 1
-                print("ERRO FOLLOWERS:", e)
-        else:
-            print("Quantidade seguidores = 0, pulando")
+    processed_data = processed[account_key]
+    if isinstance(processed_data, list):
+        processed_data = {"processed_posts": processed_data, "run_counter": 0, "followers_sent_run": 0}
+        processed[account_key] = processed_data
+
+    processed_data["run_counter"] += 1
+    current_run = processed_data["run_counter"]
 
     print("Buscando feed...")
     feed = get_feed(account.instagram_id, rapid_key, rapid_host)
@@ -114,9 +102,11 @@ def process_account(account):
 
     print("TOTAL POSTS ENCONTRADOS:", len(posts))
 
-    if not processed[account_key]:
+    if not processed_data["processed_posts"]:
         posts = posts[:5]
         print("PRIMEIRA EXECUÇÃO — limitando aos 5 posts mais recentes")
+
+    any_services_sent = False
 
     for post in posts:
         post_id = str(
@@ -129,7 +119,7 @@ def process_account(account):
             print("Post sem ID, pulando")
             continue
 
-        if post_id in processed[account_key]:
+        if post_id in processed_data["processed_posts"]:
             continue
 
         shortcode = (
@@ -175,6 +165,7 @@ def process_account(account):
                     quantity=quantidade
                 )
                 stats["orders"] += 1
+                any_services_sent = True
                 print(f"  RESPOSTA {nome}:", retorno)
             except Exception as e:
                 sucesso = False
@@ -182,10 +173,45 @@ def process_account(account):
                 print(f"  ERRO {nome}:", e)
 
         if sucesso:
-            processed[account_key].append(post_id)
+            processed_data["processed_posts"].append(post_id)
             print("  POST MARCADO COMO PROCESSADO")
         else:
             print("  POST NÃO marcado (erro em algum serviço)")
+
+    # Seguidores: só enviados se outros serviços foram enviados nesta rodada
+    # E se ao menos 1 rodada inteira passou desde o último envio de seguidores
+    if (
+        any_services_sent
+        and current_run - processed_data["followers_sent_run"] >= 2
+        and account.followers_enabled
+        and account.followers_service
+    ):
+        quantidade = int(followers * float(account.followers_pct) / 100)
+        if quantidade > 0:
+            profile_link = f"https://instagram.com/{username}"
+            print("PEDIDO FOLLOWERS:", profile_link, quantidade)
+            try:
+                retorno = add_order(
+                    smm_key=smm_key,
+                    service_id=account.followers_service,
+                    link=profile_link,
+                    quantity=quantidade
+                )
+                stats["orders"] += 1
+                processed_data["followers_sent_run"] = current_run
+                print("RESPOSTA FOLLOWERS:", retorno)
+            except Exception as e:
+                stats["errors"] += 1
+                print("ERRO FOLLOWERS:", e)
+        else:
+            print("Quantidade seguidores = 0, pulando")
+    elif account.followers_enabled and account.followers_service:
+        razao = ""
+        if not any_services_sent:
+            razao += "sem outros serviços nesta rodada; "
+        if current_run - processed_data["followers_sent_run"] < 2:
+            razao += "rodada consecutiva; "
+        print(f"FOLLOWERS: pulado ({razao})run {current_run}, last {processed_data['followers_sent_run']})")
 
     save_processed(processed)
     print("Monitor finalizado para", account.instagram_id)

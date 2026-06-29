@@ -234,7 +234,10 @@ def dashboard():
                 processed = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             pass
-        posts_seen = sum(len(v) for v in processed.values())
+        posts_seen = sum(
+            len(v) if isinstance(v, list) else len(v.get("processed_posts", []))
+            for v in processed.values()
+        )
 
         balance = None
         try:
